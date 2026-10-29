@@ -1,0 +1,813 @@
+```html
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NameSwipe AI File Renamer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full overflow-hidden flex flex-col">
+
+    <header class="bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between shrink-0 shadow-md">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-600/20">
+                <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-tight text-white">NameSwipe AI</h1>
+                <p class="text-xs text-slate-400">Tinder-style in-place batch file renamer</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <span id="global-counter" class="text-xs px-3 py-1 bg-slate-800 border border-slate-700 rounded-full text-slate-300 font-medium shadow-inner">0 files queued</span>
+        </div>
+    </header>
+
+    <main class="flex-1 overflow-hidden relative p-4 md:p-6 max-w-5xl mx-auto w-full flex flex-col">
+
+        <!-- SCREEN 1: Setup & Queue Manager -->
+        <div id="screen-setup" class="flex flex-col h-full space-y-4 transition-all duration-500">
+            <!-- Instructions Card -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl shrink-0">
+                <h2 class="text-xs font-semibold text-orange-400 uppercase tracking-wider mb-2">How it works</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+                    <div class="flex items-start space-x-2">
+                        <span class="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 font-bold">1</span>
+                        <p><strong>Add Folders or Files:</strong> Import images from multiple different locations on your computer.</p>
+                    </div>
+                    <div class="flex items-start space-x-2">
+                        <span class="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 font-bold">2</span>
+                        <p><strong>Swipe, Dictate or AI:</strong> Keep clean names with a click, use voice dictation, or let AI name messy files.</p>
+                    </div>
+                    <div class="flex items-start space-x-2">
+                        <span class="w-5 h-5 rounded-full bg-orange-500/20 text-orange-400 flex items-center justify-center shrink-0 font-bold">3</span>
+                        <p><strong>Apply Script:</strong> Download the generated script file, drop it in your folder, and double-click to rename.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Settings Section -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl shrink-0">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-xs font-semibold text-orange-400 uppercase tracking-wider">AI Settings (Gemini Vision)</h2>
+                    <span id="ai-status-badge" class="text-[11px] px-2.5 py-1 rounded-full border font-medium bg-slate-800 text-slate-400 border-slate-700">Not configured</span>
+                </div>
+                <div>
+                    <label for="api-key-input" class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Gemini API Key</label>
+                    <input type="password" id="api-key-input" autocomplete="off" spellcheck="false" placeholder="AIza..." class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-orange-500 transition-all font-mono">
+                </div>
+                <p class="text-[10px] text-slate-500 mt-2">Key is stored only in your browser's <code class="bg-slate-800 px-1 rounded">sessionStorage</code> and sent securely to Google. Images are downscaled to 768px before transmission.</p>
+            </div>
+
+            <!-- Action Buttons bar -->
+            <div class="flex flex-wrap gap-3 shrink-0">
+                <label class="flex-1 min-w-[140px] bg-orange-600 hover:bg-orange-500 text-white font-medium px-4 py-3 rounded-xl cursor-pointer transition-all shadow-lg shadow-orange-600/20 flex items-center justify-center space-x-2 text-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+                    <span>Add Folder</span>
+                    <input type="file" id="folder-input" webkitdirectory directory multiple class="hidden">
+                </label>
+                <label class="flex-1 min-w-[140px] bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium px-4 py-3 rounded-xl cursor-pointer transition-all border border-slate-700 flex items-center justify-center space-x-2 text-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span>Add Files</span>
+                    <input type="file" id="file-input" accept="image/*" multiple class="hidden">
+                </label>
+                <button id="btn-clear-queue" class="px-4 py-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-xl font-medium transition-all text-sm hidden">Clear Queue</button>
+            </div>
+
+            <!-- File Queue Manager Table -->
+            <div class="flex-1 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-inner min-h-0">
+                <div class="px-5 py-3 bg-slate-800 border-b border-slate-800 flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    <span>Queued Images</span>
+                    <span>Action / Status</span>
+                </div>
+                <div id="queue-list-container" class="flex-1 overflow-y-auto divide-y divide-slate-800/60 p-2">
+                    <div class="flex flex-col items-center justify-center h-full text-slate-500 space-y-3 py-12">
+                        <svg class="w-12 h-12 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        <p class="text-sm">No images queued yet. Add folders or files to begin.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Start Swiping CTA -->
+            <button id="btn-start-swiping" class="w-full py-4 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold rounded-2xl shadow-xl shadow-orange-600/20 transition-all flex items-center justify-center space-x-2 text-base disabled:opacity-50 disabled:cursor-not-allowed shrink-0" disabled>
+                <span>Start Swiping & Renaming</span>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+            </button>
+        </div>
+
+        <!-- SCREEN 2: Tinder / Swiping Interface -->
+        <div id="screen-tinder" class="flex flex-col h-full opacity-0 translate-x-8 transition-all duration-500 hidden">
+            <div class="flex justify-between items-center mb-4 shrink-0">
+                <button id="btn-back-setup" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition-colors flex items-center space-x-1 text-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                    <span>Back to Queue</span>
+                </button>
+                <div class="flex flex-col items-center">
+                    <span id="progress-text" class="text-orange-400 font-bold text-sm">0 / 0</span>
+                </div>
+                <div class="flex items-center space-x-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl">
+                    <label for="toggle-ai" class="text-xs text-slate-400 font-medium">Auto AI</label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-ai" class="sr-only peer" checked>
+                        <div class="w-7 h-4 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex-1 bg-slate-900 border border-slate-800 rounded-3xl p-4 flex flex-col md:flex-row gap-6 overflow-hidden shadow-2xl relative min-h-0">
+                <div class="flex-1 bg-slate-950 rounded-2xl flex items-center justify-center relative overflow-hidden group border border-slate-800/80 min-h-[200px]">
+                    <img id="current-image-preview" src="" alt="Target Image" class="max-h-full max-w-full object-contain p-2 transition-transform duration-300">
+                    <div id="ai-loading-overlay" class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm flex flex-col items-center justify-center space-y-2 transition-opacity duration-300 hidden">
+                        <div class="w-8 h-8 border-[3px] border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                        <p class="text-xs text-orange-300 font-medium tracking-wide">AI is analyzing image...</p>
+                    </div>
+                </div>
+
+                <div class="w-full md:w-80 flex flex-col justify-between shrink-0 space-y-4">
+                    <div class="space-y-3">
+                        <div>
+                            <span class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Original Filename</span>
+                            <p id="original-filename-label" class="text-xs font-mono text-slate-300 bg-slate-950 px-3 py-2 rounded-xl border border-slate-800 break-all"></p>
+                        </div>
+
+                        <div>
+                            <label for="new-name-input" class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">New Filename Suggestion</label>
+                            <div class="relative">
+                                <input type="text" id="new-name-input" class="w-full bg-slate-950 border-2 border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-orange-500 transition-all pr-12" placeholder="Type or dictate name...">
+                                <button id="btn-mic" class="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 text-slate-400 hover:text-orange-400 transition-colors rounded-lg" title="Dictate name via voice">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"></path></svg>
+                                </button>
+                            </div>
+                            <p id="ai-error" class="text-[11px] text-rose-400 mt-1 hidden" role="alert"></p>
+                            <p class="text-[10px] text-slate-500 mt-1">Press <kbd class="px-1 py-0.5 bg-slate-800 rounded text-slate-400">Enter</kbd> or right arrow to rename.</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 pt-2">
+                        <button id="btn-keep" class="py-3 px-4 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 font-semibold rounded-xl border border-slate-700 transition-all flex flex-col items-center justify-center text-xs group">
+                            <span class="text-slate-400 text-[10px] uppercase tracking-wider group-hover:text-slate-300">Left Arrow</span>
+                            <span>KEEP ORIGINAL</span>
+                        </button>
+                        <button id="btn-rename" class="py-3 px-4 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-semibold rounded-xl transition-all shadow-lg shadow-orange-600/20 flex flex-col items-center justify-center text-xs group">
+                            <span class="text-orange-200 text-[10px] uppercase tracking-wider group-hover:text-white">Enter / Right</span>
+                            <span>RENAME FILE</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SCREEN 3: Completion & Download Scripts -->
+        <div id="screen-done" class="flex flex-col h-full items-center justify-center text-center space-y-6 opacity-0 translate-y-8 transition-all duration-500 hidden">
+            <div class="w-20 h-20 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-3xl flex items-center justify-center shadow-2xl shadow-emerald-500/10">
+                <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <div class="space-y-2 max-w-md">
+                <h2 class="text-2xl font-bold text-white tracking-tight">All Images Processed!</h2>
+                <p class="text-sm text-slate-400">Your swiping session is complete. Download your automated execution scripts below to apply the renames directly in your folders.</p>
+                <p class="text-[11px] text-amber-400/80 pt-1">Place the script into your image folder and run it to execute renaming.</p>
+            </div>
+
+            <div class="flex flex-wrap gap-4 justify-center pt-2">
+                <button id="btn-download-bat" class="px-6 py-3.5 bg-orange-600 hover:bg-orange-500 text-white font-medium rounded-xl shadow-lg shadow-orange-600/20 transition-all flex items-center space-x-2 text-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span>Download Windows (.bat)</span>
+                </button>
+                <button id="btn-download-sh" class="px-6 py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium rounded-xl border border-slate-700 transition-all flex items-center space-x-2 text-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span>Download Mac/Linux (.command)</span>
+                </button>
+            </div>
+
+            <button id="btn-restart" class="text-xs text-slate-400 hover:text-white underline pt-4 transition-colors">Start Over With New Session</button>
+        </div>
+
+    </main>
+
+    <script>
+        let imageFiles = [];
+        let currentIndex = 0;
+        let renameOperations = [];
+        let aiAbortController = null;
+        let currentPreviewUrl = null;
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        const screens = {
+            setup: document.getElementById('screen-setup'),
+            tinder: document.getElementById('screen-tinder'),
+            done: document.getElementById('screen-done')
+        };
+
+        const folderInput = document.getElementById('folder-input');
+        const fileInput = document.getElementById('file-input');
+        const queueListContainer = document.getElementById('queue-list-container');
+        const btnStartSwiping = document.getElementById('btn-start-swiping');
+        const btnClearQueue = document.getElementById('btn-clear-queue');
+        const globalCounter = document.getElementById('global-counter');
+
+        const imgPreview = document.getElementById('current-image-preview');
+        const aiLoadingOverlay = document.getElementById('ai-loading-overlay');
+        const originalFilenameLabel = document.getElementById('original-filename-label');
+        const nameInput = document.getElementById('new-name-input');
+        const progressText = document.getElementById('progress-text');
+        const aiErrorEl = document.getElementById('ai-error');
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function escapeForBatch(str) {
+            return String(str).replace(/%/g, '%%').replace(/"/g, '');
+        }
+
+        function shellQuote(str) {
+            return "'" + String(str).replace(/'/g, "'\\''") + "'";
+        }
+
+        function kebab(str) {
+            return String(str).trim().toLowerCase()
+                .replace(/[^a-z0-9\s-]/g, '')
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-+|-+$/g, '');
+        }
+
+        function hideAIError() {
+            aiErrorEl.classList.add('hidden');
+            aiErrorEl.textContent = '';
+        }
+
+        function showAIError(msg) {
+            aiErrorEl.textContent = msg;
+            aiErrorEl.classList.remove('hidden');
+        }
+
+        const apiKeyInput = document.getElementById('api-key-input');
+        const aiStatusBadge = document.getElementById('ai-status-badge');
+
+        function getAISettings() {
+            return { apiKey: sessionStorage.getItem('ns_api_key') || '' };
+        }
+
+        function updateAIStatusBadge() {
+            const s = getAISettings();
+            if (s.apiKey) {
+                aiStatusBadge.textContent = 'API key set';
+                aiStatusBadge.className = 'text-[11px] px-2.5 py-1 rounded-full border font-medium bg-emerald-500/10 text-emerald-400 border-emerald-500/30';
+            } else {
+                aiStatusBadge.textContent = 'Not configured';
+                aiStatusBadge.className = 'text-[11px] px-2.5 py-1 rounded-full border font-medium bg-slate-800 text-slate-400 border-slate-700';
+            }
+        }
+
+        apiKeyInput.value = getAISettings().apiKey;
+        apiKeyInput.addEventListener('input', e => {
+            sessionStorage.setItem('ns_api_key', e.target.value.trim());
+            updateAIStatusBadge();
+        });
+        updateAIStatusBadge();
+
+        function handleFilesSelection(files) {
+            const validExts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+            for (const file of files) {
+                const ext = file.name.split('.').pop().toLowerCase();
+                if (validExts.includes(ext)) {
+                    const relPath = file.webkitRelativePath || file.name;
+                    imageFiles.push({
+                        file,
+                        name: file.name,
+                        path: relPath,
+                        status: 'pending',
+                        newName: ''
+                    });
+                }
+            }
+            renderQueueList();
+            updateQueueCounters();
+        }
+
+        folderInput.addEventListener('change', e => handleFilesSelection(e.target.files));
+        fileInput.addEventListener('change', e => handleFilesSelection(e.target.files));
+
+        function renderQueueList() {
+            if (imageFiles.length === 0) {
+                queueListContainer.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full text-slate-500 space-y-3 py-12">
+                        <svg class="w-12 h-12 stroke-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        <p class="text-sm">No images queued yet. Add folders or files to begin.</p>
+                    </div>
+                `;
+                btnClearQueue.classList.add('hidden');
+                btnStartSwiping.disabled = true;
+                return;
+            }
+
+            btnClearQueue.classList.remove('hidden');
+            btnStartSwiping.disabled = false;
+
+            let html = '';
+            imageFiles.forEach((item, index) => {
+                let badgeClass = "bg-slate-800 text-slate-400 border-slate-700";
+                let badgeText = "Pending";
+                if (item.status === 'kept') {
+                    badgeClass = "bg-blue-500/10 text-blue-400 border-blue-500/20";
+                    badgeText = "Kept Original";
+                } else if (item.status === 'renamed') {
+                    badgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+                    badgeText = `Renamed ➔ ${item.newName}`;
+                }
+
+                html += `
+                    <div class="flex items-center justify-between px-4 py-3 hover:bg-slate-800 transition-colors cursor-pointer group" onclick="jumpToQueueIndex(${index})">
+                        <div class="flex items-center space-x-3 overflow-hidden">
+                            <span class="text-xs font-mono text-slate-500 w-6">#${index + 1}</span>
+                            <span class="text-sm font-medium text-slate-200 truncate group-hover:text-orange-400 transition-colors">${escapeHtml(item.path)}</span>
+                        </div>
+                        <div class="flex items-center space-x-3 shrink-0">
+                            <span class="text-[11px] px-2.5 py-1 rounded-full border ${badgeClass} font-medium">${escapeHtml(badgeText)}</span>
+                            <button onclick="event.stopPropagation(); removeQueueItem(${index})" class="text-slate-500 hover:text-rose-400 p-1 rounded transition-colors" title="Remove">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+            queueListContainer.innerHTML = html;
+        }
+
+        function updateQueueCounters() {
+            const total = imageFiles.length;
+            globalCounter.textContent = `${total} file${total === 1 ? '' : 's'} queued`;
+        }
+
+        window.removeQueueItem = function(index) {
+            imageFiles.splice(index, 1);
+            if (currentIndex >= imageFiles.length) currentIndex = Math.max(0, imageFiles.length - 1);
+            renderQueueList();
+            updateQueueCounters();
+        };
+
+        window.jumpToQueueIndex = function(index) {
+            currentIndex = index;
+            switchToScreen('tinder');
+            showCurrentImage();
+        };
+
+        btnClearQueue.addEventListener('click', () => {
+            imageFiles = [];
+            renameOperations = [];
+            renderQueueList();
+            updateQueueCounters();
+        });
+
+        function switchToScreen(targetName) {
+            Object.keys(screens).forEach(key => {
+                const el = screens[key];
+                if (key === targetName) {
+                    el.classList.remove('hidden');
+                    setTimeout(() => {
+                        el.classList.remove('opacity-0', 'translate-x-8', 'translate-y-8');
+                    }, 20);
+                } else {
+                    el.classList.add('opacity-0', 'translate-x-8');
+                    setTimeout(() => { el.classList.add('hidden'); }, 500);
+                }
+            });
+        }
+
+        btnStartSwiping.addEventListener('click', () => {
+            currentIndex = 0;
+            renameOperations = [];
+            imageFiles.forEach(item => {
+                item.status = 'pending';
+                item.newName = '';
+            });
+            renderQueueList();
+            switchToScreen('tinder');
+            showCurrentImage();
+        });
+
+        document.getElementById('btn-back-setup').addEventListener('click', () => {
+            switchToScreen('setup');
+        });
+
+        function setPreview(file) {
+            if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
+            currentPreviewUrl = URL.createObjectURL(file);
+            imgPreview.src = currentPreviewUrl;
+        }
+
+        window.addEventListener('beforeunload', () => {
+            if (currentPreviewUrl) URL.revokeObjectURL(currentPreviewUrl);
+        });
+
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = String(reader.result);
+                    const comma = result.indexOf(',');
+                    resolve(comma >= 0 ? result.slice(comma + 1) : result);
+                };
+                reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        async function downscaleToBase64(file, maxDim = 768, quality = 0.85) {
+            try {
+                const url = URL.createObjectURL(file);
+                try {
+                    const img = await new Promise((resolve, reject) => {
+                        const i = new Image();
+                        i.onload = () => resolve(i);
+                        i.onerror = () => reject(new Error('Image decode failed'));
+                        i.src = url;
+                    });
+                    const nw = img.naturalWidth || img.width;
+                    const nh = img.naturalHeight || img.height;
+                    const scale = Math.min(1, maxDim / Math.max(nw, nh));
+                    const w = Math.max(1, Math.round(nw * scale));
+                    const h = Math.max(1, Math.round(nh * scale));
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    const blob = await new Promise(res => canvas.toBlob(res, 'image/jpeg', quality));
+                    if (!blob) throw new Error('Canvas toBlob returned null');
+                    return { base64: await blobToBase64(blob), mimeType: 'image/jpeg' };
+                } finally {
+                    URL.revokeObjectURL(url);
+                }
+            } catch (err) {
+                return {
+                    base64: await blobToBase64(file),
+                    mimeType: file.type || 'image/jpeg'
+                };
+            }
+        }
+
+        async function generateName(item, signal) {
+            const s = getAISettings();
+            if (!s.apiKey) {
+                throw new Error('AI not configured. Add an API key in AI Settings, or turn Auto AI off.');
+            }
+
+            const { base64, mimeType } = await downscaleToBase64(item.file);
+            if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(s.apiKey)}`;
+
+            const systemPrompt = "Act as an expert file renamer. Look at the core subject of this image and suggest a clean, concise descriptive name in 2 to 5 words. Use ONLY lowercase letters and hyphens (kebab-case). NO file extensions, NO quotes, NO explanation.";
+            const userPrompt = "Provide a clean name for this file:";
+
+            const payload = {
+                contents: [{
+                    role: 'user',
+                    parts: [
+                        { text: userPrompt },
+                        { inlineData: { mimeType, data: base64 } }
+                    ]
+                }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            let lastError = null;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+                let response;
+                try {
+                    response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload),
+                        signal
+                    });
+                } catch (err) {
+                    if (err.name === 'AbortError') throw err;
+                    lastError = new Error('Network error contacting AI service.');
+                    await sleep(Math.pow(2, attempt) * 1000);
+                    continue;
+                }
+
+                if (response.ok) {
+                    const result = await response.json().catch(() => null);
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (text && text.trim()) {
+                        const cleaned = kebab(text);
+                        if (cleaned) return cleaned;
+                        throw new Error('AI returned an unusable name.');
+                    }
+                    throw new Error('AI returned an empty response.');
+                }
+
+                if (response.status === 429 || response.status >= 500) {
+                    lastError = new Error(`AI service busy (HTTP ${response.status}). Retrying...`);
+                    await sleep(Math.pow(2, attempt) * 1000);
+                    continue;
+                }
+
+                let detail = '';
+                try {
+                    const body = await response.json();
+                    detail = body?.error?.message || '';
+                } catch { /* ignore */ }
+                throw new Error(`AI request failed (HTTP ${response.status})${detail ? ': ' + detail.slice(0, 160) : ''}`);
+            }
+
+            throw lastError || new Error('AI request failed after retries.');
+        }
+
+        async function showCurrentImage() {
+            if (aiAbortController) {
+                aiAbortController.abort();
+                aiAbortController = null;
+            }
+
+            if (currentIndex >= imageFiles.length) {
+                switchToScreen('done');
+                return;
+            }
+
+            const item = imageFiles[currentIndex];
+            progressText.textContent = `${currentIndex + 1} / ${imageFiles.length}`;
+            originalFilenameLabel.textContent = item.path;
+            nameInput.value = '';
+            nameInput.classList.remove('border-rose-500');
+            nameInput.classList.add('border-slate-700');
+            hideAIError();
+            setPreview(item.file);
+
+            const baseName = item.file.name.substring(0, item.file.name.lastIndexOf('.')) || item.file.name;
+            const isGenericName = /^(IMG|DSC|PXL|MVIMG|WP|Screenshot|Untitled|image)[\-_]?\d+/i.test(baseName)
+                || /^\d{8,}/.test(baseName)
+                || baseName.length < 4;
+            const useAI = document.getElementById('toggle-ai').checked;
+
+            if (!useAI || !isGenericName) {
+                nameInput.value = isGenericName ? '' : baseName;
+                nameInput.placeholder = isGenericName ? 'Type or dictate name...' : 'Original name kept.';
+                nameInput.focus();
+                return;
+            }
+
+            const settings = getAISettings();
+            if (!settings.apiKey) {
+                nameInput.classList.remove('border-slate-700');
+                nameInput.classList.add('border-rose-500');
+                nameInput.placeholder = 'AI not configured. Type a name manually.';
+                showAIError('AI is not configured. Add an API key in Setup, or toggle Auto AI off.');
+                nameInput.focus();
+                return;
+            }
+
+            aiLoadingOverlay.classList.remove('hidden');
+            nameInput.placeholder = 'AI is thinking...';
+
+            aiAbortController = new AbortController();
+            const signal = aiAbortController.signal;
+            const myIndex = currentIndex;
+
+            try {
+                const aiName = await generateName(item, signal);
+                if (signal.aborted || myIndex !== currentIndex) return;
+                nameInput.value = aiName;
+                nameInput.placeholder = 'Type or dictate name...';
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+                if (myIndex !== currentIndex) return;
+                nameInput.classList.remove('border-slate-700');
+                nameInput.classList.add('border-rose-500');
+                nameInput.placeholder = 'AI failed — type name manually.';
+                showAIError(err.message || 'AI request failed.');
+            } finally {
+                if (myIndex === currentIndex) {
+                    aiLoadingOverlay.classList.add('hidden');
+                    nameInput.focus();
+                }
+            }
+        }
+
+        function executeKeepOriginal() {
+            imageFiles[currentIndex].status = 'kept';
+            currentIndex++;
+            renderQueueList();
+            showCurrentImage();
+        }
+
+        function executeRenameFile() {
+            const newNameRaw = nameInput.value.trim();
+            if (!newNameRaw) {
+                nameInput.classList.add('border-rose-500');
+                nameInput.focus();
+                return;
+            }
+
+            const sanitizedName = newNameRaw
+                .replace(/[/\\?%*:|"<>]/g, '-')
+                .trim()
+                .replace(/\s+/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-+|-+$/g, '')
+                .toLowerCase();
+
+            if (!sanitizedName) {
+                nameInput.classList.add('border-rose-500');
+                nameInput.focus();
+                return;
+            }
+
+            const originalFile = imageFiles[currentIndex].file;
+            const dotIdx = originalFile.name.lastIndexOf('.');
+            const ext = dotIdx > 0 ? originalFile.name.substring(dotIdx) : '';
+
+            const fullOldPath = imageFiles[currentIndex].path;
+            const lastSlash = Math.max(fullOldPath.lastIndexOf('/'), fullOldPath.lastIndexOf('\\'));
+            const dirPrefix = lastSlash !== -1 ? fullOldPath.substring(0, lastSlash + 1) : '';
+            const newRelativePath = dirPrefix + sanitizedName + ext;
+
+            imageFiles[currentIndex].status = 'renamed';
+            imageFiles[currentIndex].newName = sanitizedName + ext;
+
+            renameOperations = renameOperations.filter(op => op.oldPath !== fullOldPath);
+            renameOperations.push({
+                oldPath: fullOldPath,
+                newPath: newRelativePath,
+                fileName: originalFile.name,
+                targetName: sanitizedName + ext
+            });
+
+            currentIndex++;
+            renderQueueList();
+            showCurrentImage();
+        }
+
+        document.getElementById('btn-keep').addEventListener('click', executeKeepOriginal);
+        document.getElementById('btn-rename').addEventListener('click', executeRenameFile);
+
+        window.addEventListener('keydown', (e) => {
+            if (screens.tinder.classList.contains('hidden')) return;
+
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                executeKeepOriginal();
+            } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
+                if (e.key === 'Enter' || document.activeElement === nameInput) {
+                    e.preventDefault();
+                    executeRenameFile();
+                }
+            }
+        });
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const micBtn = document.getElementById('btn-mic');
+        let isRecording = false;
+
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                isRecording = true;
+                micBtn.classList.add('text-rose-500', 'animate-pulse');
+                nameInput.placeholder = 'Listening...';
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                const cleanTranscript = kebab(transcript.replace(/[.,!?]+$/, ''));
+                nameInput.value = cleanTranscript;
+            };
+
+            recognition.onerror = () => resetMicUI();
+            recognition.onend = () => { isRecording = false; resetMicUI(); };
+
+            micBtn.addEventListener('click', () => {
+                if (isRecording) recognition.stop();
+                else { recognition.start(); nameInput.focus(); }
+            });
+        } else {
+            micBtn.style.display = 'none';
+        }
+
+        function resetMicUI() {
+            micBtn.classList.remove('text-rose-500', 'animate-pulse');
+            nameInput.placeholder = 'Type or dictate name...';
+        }
+
+        document.getElementById('btn-download-bat').addEventListener('click', () => {
+            if (renameOperations.length === 0) {
+                alert('No rename operations to export.');
+                return;
+            }
+
+            const lines = [
+                '@echo off',
+                'setlocal',
+                'chcp 65001 > nul',
+                '',
+                'echo Starting automated file renaming...',
+                'echo.'
+            ];
+
+            renameOperations.forEach(op => {
+                const oldB = escapeForBatch(op.oldPath);
+                const targetB = escapeForBatch(op.targetName);
+                const fileB = escapeForBatch(op.fileName);
+                lines.push(`if exist "${oldB}" (`);
+                lines.push(`    ren "${oldB}" "${targetB}" && echo Renamed: "${fileB}" to "${targetB}" || echo Failed: "${fileB}"`);
+                lines.push(`) else (`);
+                lines.push(`    echo Missing: "${oldB}"`);
+                lines.push(`)`);
+                lines.push('');
+            });
+
+            lines.push('echo.');
+            lines.push('echo All operations completed.');
+            lines.push('endlocal');
+            lines.push('pause');
+
+            const content = lines.join('\r\n') + '\r\n';
+            downloadTextFile(content, 'rename_files.bat', 'text/plain');
+        });
+
+        document.getElementById('btn-download-sh').addEventListener('click', () => {
+            if (renameOperations.length === 0) {
+                alert('No rename operations to export.');
+                return;
+            }
+
+            const lines = [
+                '#!/bin/bash',
+                '# NameSwipe AI Batch Renaming Script',
+                'set -u',
+                '',
+                'echo "Starting automated file renaming..."',
+                ''
+            ];
+
+            renameOperations.forEach(op => {
+                const oldQ = shellQuote(op.oldPath);
+                const targetQ = shellQuote(op.targetName);
+                const fileQ = shellQuote(op.fileName);
+                lines.push(`if [ -e ${oldQ} ]; then`);
+                lines.push(`    dir=$(dirname -- ${oldQ})`);
+                lines.push(`    if mv -- ${oldQ} "$dir"/${targetQ}; then`);
+                lines.push(`        echo "Renamed: ${fileQ} to ${targetQ}"`);
+                lines.push(`    else`);
+                lines.push(`        echo "Failed: ${fileQ}"`);
+                lines.push(`    fi`);
+                lines.push(`else`);
+                lines.push(`    echo "Missing: ${fileQ}"`);
+                lines.push(`fi`);
+                lines.push('');
+            });
+
+            lines.push('echo "All operations completed."');
+            const content = lines.join('\n') + '\n';
+            downloadTextFile(content, 'rename_files.command', 'application/x-sh');
+        });
+
+        function downloadTextFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            imageFiles = [];
+            renameOperations = [];
+            renderQueueList();
+            updateQueueCounters();
+            switchToScreen('setup');
+        });
+    </script>
+</body>
+</html>
+
+```
