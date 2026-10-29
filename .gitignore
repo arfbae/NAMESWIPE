@@ -1,0 +1,23 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local runtime output
+input_images/
+SB3D_output/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
