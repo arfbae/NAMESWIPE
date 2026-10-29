@@ -1,21 +1,30 @@
 @echo off
+setlocal
 
-REM Define input and output folders
-set INPUT_FOLDER=input_images
-set SB3D_FOLDER=SB3D_output
+set INPUT_DIR=%~dp0input_images
+set OUTPUT_DIR=%~dp0SB3D_output
+set CONFIG=%~dp0config.json
 
-REM Create folders if they don't exist
-if not exist %INPUT_FOLDER%\ mkdir %INPUT_FOLDER%
-if not exist %SB3D_FOLDER%\ mkdir %SB3D_FOLDER%
+if not exist "%INPUT_DIR%" mkdir "%INPUT_DIR%"
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
 
-echo Starting Image Renamer Tool...
-echo Make sure your images are in the ".\%INPUT_FOLDER%" folder.
-echo Renamed images will be moved to the ".\%SB3D_FOLDER%" folder.
-echo Press any key to start...
-pause >nul
+if not exist "%CONFIG%" (
+    echo Config file not found. Creating a default one...
+    copy NUL "%CONFIG%" >nul
+)
 
-python image_renamer.py
+echo Starting NameSwipe image renamer...
+echo Input folder: %INPUT_DIR%
+echo Output folder: %OUTPUT_DIR%
+echo.
+python "%~dp0image_renamer.py" --input-dir "%INPUT_DIR%" --output-dir "%OUTPUT_DIR%" --config "%CONFIG%"
 
-echo Image Renamer Tool finished.
+if errorlevel 1 (
+    echo The image renaming process finished with errors.
+    pause
+    exit /b 1
+)
+
+echo Image renamer finished.
 pause
 exit /b 0
