@@ -1,6 +1,6 @@
 torch
-clip
-pillow
+transformers
+Pillow
 pillow-heif
-tkinterdnd2
-pyinstaller
+tqdm
+pytest
