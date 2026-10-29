@@ -1,56 +1,172 @@
-
 import os
 import re
 import shutil
 import json
+from pathlib import Path
+
 from PIL import Image
 import torch
 from transformers import AutoProcessor, AutoModelForCausalLM
 from pillow_heif import register_heif_opener
 from tqdm import tqdm
 
-# Register HEIF opener for Pillow
 register_heif_opener()
 
-# --- Configuration --- #
 INPUT_FOLDER = "./input_images"
 SB3D_FOLDER = "./SB3D_output"
 CONFIG_FILE = "./config.json"
 
+# Hard reject list for any leading junk words
+BLOCKLIST = {
+    "a",
+    "an",
+    "and",
+    "artwork",
+    "computer",
+    "device",
+    "digital",
+    "for",
+    "gpu",
+    "graphic",
+    "icon",
+    "image",
+    "in",
+    "logo",
+    "of",
+    "on",
+    "photo",
+    "picture",
+    "render",
+    "screenshot",
+    "the",
+    "to",
+    "wallpaper",
+    "with",
+}
+
+VALID_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp", ".bmp"}
+
 def load_config(config_path: str) -> dict:
-    """Loads configuration from a JSON file."""
-    with open(config_path, 'r') as f:
+    with open(config_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def clean_caption_for_filename(caption: str, rules: dict) -> str:
-    """Cleans a caption to be suitable for a filename based on rules."""
-    if rules.get("to_lowercase", True):
-        caption = caption.lower()
-    
-    if rules.get("remove_punctuation", True):
-        caption = re.sub(r'[^a-z0-9\s]', '', caption)  # remove punctuation/emojis
-    
-    words = caption.split()
-    max_words = rules.get("max_words", 8)
-    caption = words[:max_words]
+def extract_date_suffix(filename: str) -> str:
+    """Return dd-mm-yyyy if the original filename contains a date."""
+    patterns = [
+        r"(\d{4})[-_.](\d{1,2})[-_.](\d{1,2})",
+        r"(\d{1,2})[-_.](\d{1,2})[-_.](\d{4})",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, filename)
+        if not match:
+            continue
+        if len(match.group(1)) == 4:
+            year, month, day = match.group(1), match.group(2), match.group(3)
+        else:
+            day, month, year = match.group(1), match.group(2), match.group(3)
+        return f"{int(day):02d}-{int(month):02d}-{int(year)}"
+    return ""
 
-    replace_char = rules.get("replace_spaces_with", "_")
-    caption = replace_char.join(caption)
-    
-    return caption
+def normalize_token(token: str) -> str:
+    token = re.sub(r"[^a-z0-9]", "", token.lower())
+    if not token:
+        return ""
+    if token in {"3d", "2d"}:
+        return token.upper()
+    return token
+
+def title_token(token: str) -> str:
+    token = normalize_token(token)
+    if not token:
+        return ""
+    if token.upper() in {"3D", "2D"}:
+        return token.upper()
+    return token.capitalize()
+
+def is_junk_prefix(word: str) -> bool:
+    return word.lower() in BLOCKLIST
+
+def sanitize_caption(caption: str, original_name: str = "", max_words: int = 8) -> str:
+    raw_words = re.findall(r"[A-Za-z0-9]+", caption or "")
+    tokens = []
+    seen = set()
+
+    for word in raw_words:
+        token = normalize_token(word)
+        if not token:
+            continue
+        if is_junk_prefix(token):
+            continue
+        if token in seen:
+            continue
+        seen.add(token)
+        tokens.append(token)
+
+    # If caption is too weak, use the original filename as fallback source
+    if len(tokens) < 2:
+        fallback_words = re.findall(r"[A-Za-z0-9]+", original_name.replace(".", " "))
+        for word in fallback_words:
+            token = normalize_token(word)
+            if not token:
+                continue
+            if is_junk_prefix(token):
+                continue
+            if token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+
+    tokens = tokens[:max_words]
+    if len(tokens) < 2:
+        tokens = ["untitled"]
+
+    cleaned = [title_token(t) for t in tokens if title_token(t)]
+    base = "-".join(cleaned)
+
+    # Force out any leading generic junk if it passed through
+    generic_prefixes = (
+        "Gpu-",
+        "Computer-",
+        "Image-",
+        "Photo-",
+        "Picture-",
+        "Screenshot-",
+        "Artwork-",
+        "Graphic-",
+    )
+    if base.lower().startswith(generic_prefixes):
+        base = base.split("-", 1)[1] if "-" in base else base
+
+    if not base or base.lower() in {"untitled", "photo", "image", "gpu"}:
+        base = "Untitled"
+
+    date_suffix = extract_date_suffix(original_name)
+    if date_suffix:
+        base = f"{base}-{date_suffix}"
+
+    return base
+
+def safe_output_name(base_name: str, ext: str, output_dir: str) -> str:
+    candidate = f"{base_name}{ext.lower()}"
+    final = os.path.join(output_dir, candidate)
+    counter = 1
+    while os.path.exists(final):
+        candidate = f"{base_name}_{counter}{ext.lower()}"
+        final = os.path.join(output_dir, candidate)
+        counter += 1
+    return candidate
 
 def process_images(input_dir: str, output_dir: str, config: dict):
-    """Processes images in input_dir, renames them, and moves to output_dir."""
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(input_dir, exist_ok=True)
 
     caption_rules = config.get("caption_cleaning_rules", {})
     model_config = config.get("model_config", {})
     model_name = model_config.get("model_name", "microsoft/Florence-2-large")
-    max_new_tokens = model_config.get("max_new_tokens", 20)
-    num_beams = model_config.get("num_beams", 3)
+    max_new_tokens = int(model_config.get("max_new_tokens", 20))
+    num_beams = int(model_config.get("num_beams", 3))
+    max_words = int(caption_rules.get("max_words", 8))
 
-    # Determine device (GPU if available, else CPU)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
@@ -59,71 +175,60 @@ def process_images(input_dir: str, output_dir: str, config: dict):
     model = AutoModelForCausalLM.from_pretrained(model_name, trust_remote_code=True).to(device)
     print("Model loaded.")
 
-    image_extensions = (".jpg", ".jpeg", ".png", ".heic")
-    untitled_counter = 0
-
-    image_files = [f for f in os.listdir(input_dir) if f.lower().endswith(image_extensions)]
+    image_files = [
+        f for f in sorted(os.listdir(input_dir))
+        if f.lower().endswith(tuple(VALID_EXTS))
+    ]
 
     if not image_files:
         print(f"No images found in {input_dir}. Please place your images there.")
         return
 
     for filename in tqdm(image_files, desc="Processing Images"):
-        original_filepath = os.path.join(input_dir, filename)
-        name, ext = os.path.splitext(filename)
+        original_path = os.path.join(input_dir, filename)
+        _, ext = os.path.splitext(filename)
 
         try:
-            image = Image.open(original_filepath).convert("RGB")
-
-            # Generate caption
+            image = Image.open(original_path).convert("RGB")
             prompt = "An image of"
             inputs = processor(text=prompt, images=image, return_tensors="pt").to(device)
+
             generated_ids = model.generate(
                 input_ids=inputs["input_ids"],
                 pixel_values=inputs["pixel_values"],
                 max_new_tokens=max_new_tokens,
                 num_beams=num_beams,
-                do_sample=False
+                do_sample=False,
             )
+
             generated_text = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             caption = generated_text.replace(prompt, "").strip()
 
             if caption:
-                new_filename_base = clean_caption_for_filename(caption, caption_rules)
+                generated_name = sanitize_caption(caption, original_name=filename, max_words=max_words)
             else:
-                untitled_counter += 1
-                new_filename_base = f"untitled_{untitled_counter}"
-                tqdm.write(f"Could not generate caption for {filename}, using fallback: {new_filename_base}")
+                generated_name = sanitize_caption("", original_name=filename, max_words=max_words)
 
-            new_filename = f"{new_filename_base}{ext.lower()}"
-            destination_filepath = os.path.join(output_dir, new_filename)
+            final_name = safe_output_name(generated_name, ext, output_dir)
+            destination = os.path.join(output_dir, final_name)
 
-            # Ensure unique filename if one already exists
-            counter = 1
-            while os.path.exists(destination_filepath):
-                new_filename = f"{new_filename_base}_{counter}{ext.lower()}"
-                destination_filepath = os.path.join(output_dir, new_filename)
-                counter += 1
-
-            shutil.move(original_filepath, destination_filepath)
-            # tqdm.write(f"Renamed \'{filename}\' to \'{new_filename}\' and moved to \'{output_dir}\'")
+            shutil.move(original_path, destination)
+            print(f"Renamed: {filename} -> {final_name}")
 
         except Exception as e:
             tqdm.write(f"Error processing {filename}: {e}")
-            # Fallback for errors during processing
-            untitled_counter += 1
-            new_filename_base = f"untitled_{untitled_counter}"
-            new_filename = f"{new_filename_base}{ext.lower()}"
-            destination_filepath = os.path.join(output_dir, new_filename)
-            
-            counter = 1
-            while os.path.exists(destination_filepath):
-                new_filename = f"{new_filename_base}_{counter}{ext.lower()}"
-                destination_filepath = os.path.join(output_dir, new_filename)
-                counter += 1
+            fallback_base = "Untitled"
+            date_suffix = extract_date_suffix(filename)
+            if date_suffix:
+                fallback_base = f"{fallback_base}-{date_suffix}"
+            final_name = safe_output_name(fallback_base, ext, output_dir)
+            destination = os.path.join(output_dir, final_name)
 
-            shutil.move(original_filepath, destination_filepath)
-            tqdm.write(f"Moved \'{filename}\' to \'{new_filename}\' in \'{output_dir}\' due to error.")
+            try:
+                shutil.move(original_path, destination)
+                tqdm.write(f"Fallback rename used: {final_name}")
+            except Exception as move_err:
+                tqdm.write(f"Move failed for {filename}: {move_err}")
 
     print("Image processing complete.")
 
@@ -132,11 +237,11 @@ if __name__ == "__main__":
     try:
         config = load_config(CONFIG_FILE)
     except FileNotFoundError:
-        print(f"Error: Configuration file \'{CONFIG_FILE}\' not found. Please ensure it exists.")
-        exit(1)
+        print(f"Error: Configuration file '{CONFIG_FILE}' not found. Please ensure it exists.")
+        raise SystemExit(1)
     except json.JSONDecodeError:
-        print(f"Error: Could not parse \'{CONFIG_FILE}\'. Please check its format.")
-        exit(1)
+        print(f"Error: Could not parse '{CONFIG_FILE}'. Please check its format.")
+        raise SystemExit(1)
 
     process_images(INPUT_FOLDER, SB3D_FOLDER, config)
     print("Tool finished.")
