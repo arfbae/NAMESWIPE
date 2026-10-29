@@ -1,0 +1,13 @@
+{
+    "caption_cleaning_rules": {
+        "to_lowercase": true,
+        "replace_spaces_with": "_",
+        "remove_punctuation": true,
+        "max_words": 8
+    },
+    "model_config": {
+        "model_name": "microsoft/Florence-2-large",
+        "max_new_tokens": 20,
+        "num_beams": 3
+    }
+}
